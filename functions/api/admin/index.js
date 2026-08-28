@@ -85,11 +85,12 @@ function getAdminHTML() {
       .logout{float:right;color:#e53e3e;cursor:pointer;font-size:.95em;}
       .mono{font-family:ui-monospace,SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:.86em;color:#334155;}
       .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-      .action-btn{padding:6px 10px;border:1px solid #c7d2fe;background:#fff;border-radius:8px;cursor:pointer;color:#1e293b;min-width:72px}
+      .action-btn{padding:6px 10px;border:1px solid #c7d2fe;background:#fff;border-radius:8px;cursor:pointer;color:#1e293b}
       .action-btn:hover{background:#f8f9ff}
       .action-btn.primary{background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;border-color:transparent}
       .action-btn.primary:hover{filter:brightness(1.05)}
       .action-btn:disabled{opacity:.5;cursor:not-allowed}
+      .action-btn.muted{opacity:.45;cursor:not-allowed}
       .status-pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:12px}
       .pagination{display:flex;align-items:center;justify-content:space-between;margin-top:12px;gap:8px;flex-wrap:wrap;}
       .pagination .pager{display:flex;gap:8px;}
@@ -379,7 +380,7 @@ function getAdminHTML() {
               '<td class="actions">' +
               (canDownload
                 ? '<a class="action-btn primary" href="' + proxyLink + '" target="_blank">下载</a>'
-                : '<span class="action-btn" style="opacity:.45;cursor:not-allowed">不可下载</span>'
+                : '<span class="action-btn muted">不可下载</span>'
               ) +
               ' <button type="button" class="action-btn" data-copy-idx="' + realIndex + '" ' +
               (canCopy ? '' : 'disabled') + '>' + (canCopy ? '复制原始链接' : '无可复制链接') + '</button>' +
