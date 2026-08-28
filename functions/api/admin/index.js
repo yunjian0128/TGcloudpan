@@ -33,8 +33,10 @@ function getLoginHTML() {
         const username = document.getElementById('username').value;
         const password = document.getElementById('password').value;
         this.disabled = true;
-        const res = await fetch('/admin/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
-        if (res.ok) { location.reload(); } else {
+        const params = new URLSearchParams(window.location.search);
+        const nextTarget = params.get('next') || '/';
+        const res = await fetch('/api/admin/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+        if (res.ok) { location.href = nextTarget; } else {
           const data = await res.json();
           document.getElementById('msg').innerText = data.error || '登录失败';
           this.disabled = false;
@@ -66,7 +68,7 @@ function getAdminHTML() {
     </div>
     <script>
       async function loadFiles() {
-        const res = await fetch('/admin/files');
+        const res = await fetch('/api/admin/files');
         if (!res.ok) {
           document.getElementById('msg').innerText = '无法获取文件列表';
           return;
@@ -76,11 +78,11 @@ function getAdminHTML() {
         tbody.innerHTML = '';
         for (const f of data.files) {
           const tr = document.createElement('tr');
-          tr.innerHTML = '<td><span title="' + f.name + '">' + f.name + '</span></td>' +
-                         '<td>' + formatSize(f.size) + '</td>' +
-                         '<td>' + f.type + '</td>' +
-                         '<td>' + formatTime(f.uploadTime) + '</td>' +
-                         '<td><a href="' + f.url + '" target="_blank">下载</a></td>';
+        tr.innerHTML = '<td><span title="' + f.name + '">' + f.name + '</span></td>' +
+                           '<td>' + formatSize(f.size) + '</td>' +
+                           '<td>' + f.type + '</td>' +
+                           '<td>' + formatTime(f.uploadTime) + '</td>' +
+                           '<td><a href="/api/proxy?url=' + encodeURIComponent(f.url) + '&filename=' + encodeURIComponent(f.name) + '" target="_blank">下载</a></td>';
           tbody.appendChild(tr);
         }
       }

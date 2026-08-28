@@ -12,16 +12,6 @@ export async function onRequestPost(context) {
   };
 
   try {
-    if (!isAuthenticated(request)) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: {
-          'Content-Type': 'application/json',
-          ...corsHeaders
-        }
-      });
-    }
-
     const formData = await request.formData();
     const file = formData.get('file');
     
@@ -181,11 +171,6 @@ async function uploadToTelegram(file, fileName, env) {
     console.error('Telegram upload error:', error);
     return { success: false, error: 'Telegram upload failed' };
   }
-}
-
-function isAuthenticated(request) {
-  const cookie = request.headers.get('Cookie') || '';
-  return cookie.includes('admin_session=1');
 }
 
 // 格式化文件大小

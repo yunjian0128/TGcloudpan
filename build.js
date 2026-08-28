@@ -472,7 +472,7 @@ const adminHtml = `<!DOCTYPE html>
       const tbody = document.querySelector('#fileTable tbody');
       tbody.innerHTML = '';
       for (const f of data.files) {
-        const downloadLink = f.url ? '<a href="' + f.url + '" target="_blank">下载</a>' : '无链接';
+        const downloadLink = f.url ? '<a href="/api/proxy?url=' + encodeURIComponent(f.url) + '&filename=' + encodeURIComponent(f.name) + '" target="_blank">下载</a>' : '无链接';
         const tr = document.createElement('tr');
         tr.innerHTML = '<td><span title="' + f.name + '">' + f.name + '</span></td>' +
                        '<td>' + formatSize(f.size) + '</td>' +
