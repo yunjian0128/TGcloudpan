@@ -50,15 +50,8 @@ function getLoginHTML() {
   </html>`;
 }
 
-function getAdminHTML() {
-  return `<!DOCTYPE html>
-  <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>管理后台</title>
-    <link rel="stylesheet" href="/style.css">
-    <style>
+function getAdminStyles() {
+  return `
       .container{max-width:1240px;margin:40px auto;padding:24px 20px;background:#fff;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.08);}
       .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-top:14px}
       .toolbar .group{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
@@ -98,11 +91,19 @@ function getAdminHTML() {
       .pager button.active{background:#334155;}
       .toast{position:fixed;right:16px;top:16px;background:#1f2937;color:#fff;border-radius:8px;padding:8px 12px;font-size:13px;display:none;z-index:1000}
       .loading{color:#64748b;margin-top:16px;}
-    </style>
-  </head>
-  <body>
-    <div class="container">
+    `.trim();
+}
+
+function getAdminHeader() {
+  return `
       <h2>管理后台 <span class="logout" onclick="logout()">退出</span></h2>
+      ${getAdminToolbar()}
+      ${getAdminStats()}
+    `.trim();
+}
+
+function getAdminToolbar() {
+  return `
       <div class="toolbar">
         <div class="group">
           <input id="searchInput" placeholder="搜索文件名" />
@@ -122,6 +123,11 @@ function getAdminHTML() {
           <button id="refreshBtn" class="admin-btn">刷新</button>
         </div>
       </div>
+    `.trim();
+}
+
+function getAdminStats() {
+  return `
       <div class="stats" id="stats">
         <span>文件总数：<b id="totalCount">0</b></span>
         <span>筛选后：<b id="filteredCount">0</b></span>
@@ -129,6 +135,15 @@ function getAdminHTML() {
         <span>当前页：<b id="currentPageText">1 / 1</b></span>
       </div>
       <div class="sub-msg" id="subInfo"></div>
+      ${getAdminTable()}
+      <div class="loading" id="loadingText">正在加载文件列表...</div>
+      <div id="msg" class="msg"></div>
+      ${getAdminPagination()}
+    `.trim();
+}
+
+function getAdminTable() {
+  return `
       <div class="table-wrap">
         <table id="fileTable">
           <thead>
@@ -144,8 +159,11 @@ function getAdminHTML() {
           <tbody id="fileTableBody"></tbody>
         </table>
       </div>
-      <div class="loading" id="loadingText">正在加载文件列表...</div>
-      <div id="msg" class="msg"></div>
+    `.trim();
+}
+
+function getAdminPagination() {
+  return `
       <div class="pagination">
         <span id="pageInfo" class="sub-msg"></span>
         <div class="pager">
@@ -155,9 +173,20 @@ function getAdminHTML() {
           <button id="lastPageBtn" class="admin-btn">末页</button>
         </div>
       </div>
+    `.trim();
+}
+
+function getAdminShell() {
+  return `
+    <div class="container">
+      ${getAdminHeader()}
     </div>
     <div class="toast" id="toast"></div>
-    <script>
+  `.trim();
+}
+
+function getAdminScript() {
+  return `
       let allFiles = [];
       let filteredFiles = [];
       let sortBy = 'uploadTime';
@@ -224,7 +253,7 @@ function getAdminHTML() {
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
+          .replace(/\"/g, '&quot;')
           .replace(/'/g, '&#39;');
       }
 
@@ -345,6 +374,42 @@ function getAdminHTML() {
         setDisabled(el.controls.lastPageBtn, currentPage >= totalPages);
       }
 
+      function createStatusCell(status) {
+        return '<span class=\"status-pill\">' + escapeHtml(status) + '</span>';
+      }
+
+      function createActionCell(file, idx, proxyLink) {
+        const rawUrl = file.url || '';
+        const canDownload = Boolean(proxyLink);
+        const canCopy = Boolean(rawUrl);
+        const actionBtn = canDownload
+          ? '<a class=\"action-btn primary\" href=\"' + proxyLink + '\" target=\"_blank\">下载</a>'
+          : '<span class=\"action-btn muted\">不可下载</span>';
+        const copyBtn = '<button type=\"button\" class=\"action-btn\" data-copy-idx=\"' + idx + '\" ' + (canCopy ? '' : 'disabled') + '>' + (canCopy ? '复制原始链接' : '无可复制链接') + '</button>';
+        return '<td class=\"actions\">' + actionBtn + ' ' + copyBtn + '</td>';
+      }
+
+      function createNameCell(file) {
+        const safeName = escapeHtml(file.name || '未命名');
+        return '<td><span title=\"' + safeName + '\">' + safeName + '</span></td>';
+      }
+
+      function createFileRow(file, realIndex) {
+        const safeType = escapeHtml(file.type || 'unknown');
+        const sizeText = formatSize(Number(file.size) || 0);
+        const timeText = formatTime(file.uploadTime);
+        const status = getStatus(file);
+        const proxyLink = buildProxyUrl(file);
+        return '<tr>' +
+          createNameCell(file) +
+          '<td>' + sizeText + '</td>' +
+          '<td>' + safeType + '</td>' +
+          '<td>' + timeText + '</td>' +
+          '<td>' + createStatusCell(status) + '</td>' +
+          createActionCell(file, realIndex, proxyLink) +
+          '</tr>';
+      }
+
       function render() {
         setDisplay(el.loadingText, 'none');
         setText(el.msg, state.error || '');
@@ -353,40 +418,13 @@ function getAdminHTML() {
         if (!filteredFiles.length) {
           setHtml(
             el.tbody,
-            '<tr><td colspan="6">暂无数据，先检查筛选条件或稍后重试。</td></tr>'
+            '<tr><td colspan=\"6\">暂无数据，先检查筛选条件或稍后重试。</td></tr>'
           );
         } else {
           const start = (currentPage - 1) * pageSize;
           const end = start + pageSize;
           const pageRows = filteredFiles.slice(start, end);
-          const rows = pageRows.map((file, index) => {
-            const realIndex = start + index;
-            const safeName = escapeHtml(file.name || '未命名');
-            const safeType = escapeHtml(file.type || 'unknown');
-            const rawUrl = file.url || '';
-            const status = getStatus(file);
-            const proxyLink = buildProxyUrl(file);
-            const sizeText = formatSize(Number(file.size) || 0);
-            const timeText = formatTime(file.uploadTime);
-            const canDownload = Boolean(proxyLink);
-            const canCopy = Boolean(rawUrl);
-            return '' +
-              '<tr>' +
-              '<td><span title="' + safeName + '">' + safeName + '</span></td>' +
-              '<td>' + sizeText + '</td>' +
-              '<td>' + safeType + '</td>' +
-              '<td>' + timeText + '</td>' +
-              '<td><span class="status-pill">' + status + '</span></td>' +
-              '<td class="actions">' +
-              (canDownload
-                ? '<a class="action-btn primary" href="' + proxyLink + '" target="_blank">下载</a>'
-                : '<span class="action-btn muted">不可下载</span>'
-              ) +
-              ' <button type="button" class="action-btn" data-copy-idx="' + realIndex + '" ' +
-              (canCopy ? '' : 'disabled') + '>' + (canCopy ? '复制原始链接' : '无可复制链接') + '</button>' +
-              '</td>' +
-              '</tr>';
-          }).join('');
+          const rows = pageRows.map((file, index) => createFileRow(file, start + index)).join('');
           setHtml(el.tbody, rows);
         }
         updateStats();
@@ -553,6 +591,23 @@ function getAdminHTML() {
       }
 
       renderInitial();
+  `;
+}
+
+function getAdminHTML() {
+  return `<!DOCTYPE html>
+  <html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台</title>
+    <link rel="stylesheet" href="/style.css">
+    <style>${getAdminStyles()}</style>
+  </head>
+  <body>
+    ${getAdminShell()}
+    <script>
+      ${getAdminScript()}
     </script>
   </body>
   </html>`;
