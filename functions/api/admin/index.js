@@ -78,13 +78,13 @@ function getAdminStyles() {
       .logout{float:right;color:#e53e3e;cursor:pointer;font-size:.95em;}
       .mono{font-family:ui-monospace,SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:.86em;color:#334155;}
       .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-      .admin-btn,.action-btn,.pager button{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:10px;box-sizing:border-box;border:1px solid #c7d2fe;background:#fff;color:#1e293b;line-height:1.2;font-size:13px;cursor:pointer;transition:transform .15s ease, filter .15s ease, background .15s ease}
-      .admin-btn:hover,.action-btn:hover{background:#f8f9ff}
-      .admin-btn:disabled,.action-btn:disabled{opacity:.5;cursor:not-allowed}
-      .admin-btn:focus-visible,.action-btn:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(102,126,234,0.15)}
-      .action-btn.primary{background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;border-color:transparent}
-      .action-btn.primary:hover{filter:brightness(1.05)}
-      .action-btn.muted{opacity:.45;cursor:not-allowed}
+      .btn{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:10px;box-sizing:border-box;border:1px solid #c7d2fe;background:#fff;color:#1e293b;line-height:1.2;font-size:13px;cursor:pointer;white-space:nowrap;transition:transform .15s ease, filter .15s ease, background .15s ease}
+      .btn:hover{background:#f8f9ff}
+      .btn:disabled,.btn[disabled]{opacity:.5;cursor:not-allowed}
+      .btn:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(102,126,234,0.15)}
+      .btn.btn-primary{background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;border-color:transparent}
+      .btn.btn-primary:hover{filter:brightness(1.05)}
+      .btn.btn-muted{opacity:.45;cursor:not-allowed}
       .status-pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:12px}
       .pagination{display:flex;align-items:center;justify-content:space-between;margin-top:12px;gap:8px;flex-wrap:wrap;}
       .pagination .pager{display:flex;gap:8px;}
@@ -120,7 +120,7 @@ function getAdminToolbar() {
             <option value="20" selected>20 条/页</option>
             <option value="50">50 条/页</option>
           </select>
-          <button id="refreshBtn" class="admin-btn">刷新</button>
+          <button id="refreshBtn" class="btn">刷新</button>
         </div>
       </div>
     `.trim();
@@ -167,10 +167,10 @@ function getAdminPagination() {
       <div class="pagination">
         <span id="pageInfo" class="sub-msg"></span>
         <div class="pager">
-          <button id="firstPageBtn" class="admin-btn">首页</button>
-          <button id="prevBtn" class="admin-btn">上一页</button>
-          <button id="nextBtn" class="admin-btn">下一页</button>
-          <button id="lastPageBtn" class="admin-btn">末页</button>
+          <button id="firstPageBtn" class="btn">首页</button>
+          <button id="prevBtn" class="btn">上一页</button>
+          <button id="nextBtn" class="btn">下一页</button>
+          <button id="lastPageBtn" class="btn">末页</button>
         </div>
       </div>
     `.trim();
@@ -374,41 +374,47 @@ function getAdminScript() {
         setDisabled(el.controls.lastPageBtn, currentPage >= totalPages);
       }
 
-      function createStatusCell(status) {
-        return '<span class=\"status-pill\">' + escapeHtml(status) + '</span>';
-      }
-
-      function createActionCell(file, idx, proxyLink) {
-        const rawUrl = file.url || '';
-        const canDownload = Boolean(proxyLink);
-        const canCopy = Boolean(rawUrl);
-        const actionBtn = canDownload
-          ? '<a class=\"action-btn primary\" href=\"' + proxyLink + '\" target=\"_blank\">下载</a>'
-          : '<span class=\"action-btn muted\">不可下载</span>';
-        const copyBtn = '<button type=\"button\" class=\"action-btn\" data-copy-idx=\"' + idx + '\" ' + (canCopy ? '' : 'disabled') + '>' + (canCopy ? '复制原始链接' : '无可复制链接') + '</button>';
-        return '<td class=\"actions\">' + actionBtn + ' ' + copyBtn + '</td>';
-      }
-
-      function createNameCell(file) {
-        const safeName = escapeHtml(file.name || '未命名');
-        return '<td><span title=\"' + safeName + '\">' + safeName + '</span></td>';
-      }
-
-      function createFileRow(file, realIndex) {
-        const safeType = escapeHtml(file.type || 'unknown');
-        const sizeText = formatSize(Number(file.size) || 0);
-        const timeText = formatTime(file.uploadTime);
-        const status = getStatus(file);
-        const proxyLink = buildProxyUrl(file);
-        return '<tr>' +
-          createNameCell(file) +
-          '<td>' + sizeText + '</td>' +
-          '<td>' + safeType + '</td>' +
-          '<td>' + timeText + '</td>' +
-          '<td>' + createStatusCell(status) + '</td>' +
-          createActionCell(file, realIndex, proxyLink) +
-          '</tr>';
-      }
+      const AdminComponents = {
+        statusPill(status) {
+          return '<span class=\"status-pill\">' + escapeHtml(status) + '</span>';
+        },
+        fileName(file) {
+          const safeName = escapeHtml(file.name || '未命名');
+          return '<td><span title=\"' + safeName + '\">' + safeName + '</span></td>';
+        },
+        fileType(file) {
+          return '<td>' + escapeHtml(file.type || 'unknown') + '</td>';
+        },
+        fileSize(file) {
+          return '<td>' + formatSize(Number(file.size) || 0) + '</td>';
+        },
+        uploadTime(file) {
+          return '<td>' + formatTime(file.uploadTime) + '</td>';
+        },
+        action(file, idx, proxyLink) {
+          const canDownload = Boolean(proxyLink);
+          const canCopy = Boolean(file.url);
+          const downloadBtn = canDownload
+            ? '<a class=\"btn btn-primary\" href=\"' + proxyLink + '\" target=\"_blank\">下载</a>'
+            : '<button class=\"btn btn-muted\" type=\"button\" disabled>不可下载</button>';
+          const copyBtn = '<button type=\"button\" class=\"btn\" data-copy-idx=\"' + idx + '\" ' + (canCopy ? '' : 'disabled') + '>' + (canCopy ? '复制链接' : '无链接') + '</button>';
+          return '<td class=\"actions\">' + downloadBtn + copyBtn + '</td>';
+        },
+        emptyRow() {
+          return '<tr><td colspan=\"6\">暂无数据，先检查筛选条件或稍后重试。</td></tr>';
+        },
+        fileRow(file, index) {
+          const proxyLink = buildProxyUrl(file);
+          return '<tr>' +
+            this.fileName(file) +
+            this.fileSize(file) +
+            this.fileType(file) +
+            this.uploadTime(file) +
+            '<td>' + this.statusPill(getStatus(file)) + '</td>' +
+            this.action(file, index, proxyLink) +
+            '</tr>';
+        }
+      };
 
       function render() {
         setDisplay(el.loadingText, 'none');
@@ -416,15 +422,12 @@ function getAdminScript() {
         filteredFiles = getFilteredFiles();
         if (!el.tbody) return;
         if (!filteredFiles.length) {
-          setHtml(
-            el.tbody,
-            '<tr><td colspan=\"6\">暂无数据，先检查筛选条件或稍后重试。</td></tr>'
-          );
+          setHtml(el.tbody, AdminComponents.emptyRow());
         } else {
           const start = (currentPage - 1) * pageSize;
           const end = start + pageSize;
           const pageRows = filteredFiles.slice(start, end);
-          const rows = pageRows.map((file, index) => createFileRow(file, start + index)).join('');
+          const rows = pageRows.map((file, index) => AdminComponents.fileRow(file, start + index)).join('');
           setHtml(el.tbody, rows);
         }
         updateStats();
