@@ -64,13 +64,15 @@ function getAdminStyles() {
       .stats b{color:#111827}
       .msg{min-height:22px;color:#e53e3e;margin-top:10px;font-size:.94em;}
       .sub-msg{margin-top:8px;font-size:.9em;color:#64748b;}
-      .table-wrap{margin-top:12px;}
-      .tabulator{border:1px solid #ecf0ff;border-radius:12px;overflow:hidden;}
-      .tabulator .tabulator-header{background:#f8f9ff;color:#334155;}
-      .tabulator .tabulator-col{background:transparent;}
-      .tabulator .tabulator-row{min-height:44px;}
-      .tabulator .tabulator-row.tabulator-row-even{background:#fcfdff;}
-      .tabulator .tabulator-row:hover{background:#f8f9ff;}
+      .table-wrap{overflow-x:auto;margin-top:12px;border:1px solid #ecf0ff;border-radius:12px}
+      table{width:100%;border-collapse:collapse;min-width:860px;background:#fff}
+      th,td{padding:12px 10px;border-bottom:1px solid #eef2f7;text-align:left;vertical-align:middle;word-break:break-all;}
+      th{background:#f8f9ff;cursor:pointer;white-space:nowrap;}
+      th.sortable::after{content:'↕';font-size:12px;color:#94a3b8;margin-left:6px;}
+      th.sort-active-asc::after{content:'↑';color:#334155;}
+      th.sort-active-desc::after{content:'↓';color:#334155;}
+      tbody tr:hover{background:#f8f9ff;}
+      tbody tr{transition:background .15s ease}
       a{color:#667eea;text-decoration:none}
       a:hover{text-decoration:underline}
       .logout{float:right;color:#e53e3e;cursor:pointer;font-size:.95em;}
@@ -143,7 +145,19 @@ function getAdminStats() {
 function getAdminTable() {
   return `
       <div class="table-wrap">
-        <div id="fileTable"></div>
+        <table id="fileTable">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="name">文件名</th>
+              <th class="sortable" data-sort="size">大小</th>
+              <th class="sortable" data-sort="type">类型</th>
+              <th class="sortable" data-sort="uploadTime">上传时间</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="fileTableBody"></tbody>
+        </table>
       </div>
     `.trim();
 }
@@ -175,8 +189,10 @@ function getAdminScript() {
   return `
       let allFiles = [];
       let filteredFiles = [];
-      let table;
-      const fileMap = new Map();
+      let sortBy = 'uploadTime';
+      let sortDirection = 'desc';
+      let currentPage = 1;
+      let pageSize = 20;
 
       const state = {
         loading: true,
@@ -184,6 +200,7 @@ function getAdminScript() {
       };
 
       const el = {
+        tbody: document.querySelector('#fileTableBody'),
         msg: document.getElementById('msg'),
         loadingText: document.getElementById('loadingText'),
         stats: {
@@ -210,6 +227,11 @@ function getAdminScript() {
       function setText(node, text) {
         if (!node) return;
         node.innerText = String(text || '');
+      }
+
+      function setHtml(node, html) {
+        if (!node) return;
+        node.innerHTML = String(html || '');
       }
 
       function setDisplay(node, value) {
@@ -315,11 +337,7 @@ function getAdminScript() {
       }
 
       function buildFileMap(rows) {
-        fileMap.clear();
-        rows.forEach((row) => {
-          if (!row || !row.uid) return;
-          fileMap.set(row.uid, row);
-        });
+        return rows;
       }
 
       function getFilteredFiles() {
@@ -334,15 +352,15 @@ function getAdminScript() {
       }
 
       function getCurrentTablePage() {
-        return safeCall(() => table.getPage(), 1) || 1;
+        return currentPage;
       }
 
       function getMaxTablePage() {
-        return Math.max(1, safeCall(() => table.getPageMax(), Math.max(1, Math.ceil(filteredFiles.length / getPageSizeValue()))));
+        return Math.max(1, Math.ceil(filteredFiles.length / pageSize));
       }
 
       function getTablePageSize() {
-        return safeCall(() => table.getPageSize(), getPageSizeValue());
+        return pageSize;
       }
 
       function updatePager() {
@@ -374,7 +392,7 @@ function getAdminScript() {
         const pageSize = getTablePageSize();
         const totalPages = getMaxTablePage();
         const currentPage = getCurrentTablePage();
-        const sorters = safeCall(() => table.getSorters(), []);
+        const sorters = [{ field: sortBy, dir: sortDirection }];
 
         const filteredSize = filteredFiles.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
         const totalCount = allFiles.length;
@@ -390,63 +408,75 @@ function getAdminScript() {
         setText(el.controls.subInfo, getSortLabel(sorters));
       }
 
-      function renderActions(cell) {
-        const rowData = cell.getData() || {};
+      function renderActions(rowData) {
         const canDownload = Boolean(rowData.proxyUrl);
         const canCopy = Boolean(rowData.url);
         const downloadBtn = canDownload
-          ? '<a class=\"btn btn-primary\" href=\"' + escapeHtml(rowData.proxyUrl) + '\" target=\"_blank\" rel=\"noreferrer\">下载</a>'
+          ? '<a class="btn btn-primary" href="' + escapeHtml(rowData.proxyUrl) + '" target="_blank" rel="noreferrer">下载</a>'
           : '<button class=\"btn btn-muted\" type=\"button\" disabled>不可下载</button>';
         const copyBtn = canCopy
-          ? '<button class=\"btn admin-copy-btn\" type=\"button\" data-uid=\"' + escapeHtml(rowData.uid) + '\">复制链接</button>'
+          ? '<button class="btn admin-copy-btn" type="button" data-uid="' + escapeHtml(rowData.uid) + '">复制链接</button>'
           : '<button class=\"btn\" type=\"button\" disabled>无链接</button>';
-        return '<div class=\"actions\">' + downloadBtn + copyBtn + '</div>';
+        return '<div class="actions">' + downloadBtn + copyBtn + '</div>';
       }
 
-      function renderStatus(cell) {
-        return '<span class=\"status-pill\">' + escapeHtml(cell.getValue() || '') + '</span>';
+      function renderStatus(value) {
+        return '<span class="status-pill">' + escapeHtml(value || '') + '</span>';
       }
 
-      function initTable() {
-        if (!window.Tabulator) {
-          setStateError('Tabulator 加载失败，请检查 CDN 可访问性');
-          setDisplay(el.loadingText, 'block');
-          setText(el.loadingText, '页面组件加载失败，请稍后重试。');
+      function sortFiles(list) {
+        const sorted = list.slice();
+        sorted.sort((a, b) => {
+          let av = a[sortBy];
+          let bv = b[sortBy];
+          if (sortBy === 'name' || sortBy === 'typeLabel' || sortBy === 'status') {
+            av = String(av || '').toLowerCase();
+            bv = String(bv || '').toLowerCase();
+            if (av < bv) return sortDirection === 'asc' ? -1 : 1;
+            if (av > bv) return sortDirection === 'asc' ? 1 : -1;
+            return 0;
+          }
+          av = Number(av) || 0;
+          bv = Number(bv) || 0;
+          return sortDirection === 'asc' ? av - bv : bv - av;
+        });
+        return sorted;
+      }
+
+      function getPaginatedFiles() {
+        const start = (currentPage - 1) * pageSize;
+        return filteredFiles.slice(start, start + pageSize);
+      }
+
+      function renderTable() {
+        if (!el.tbody) return;
+        const rows = getPaginatedFiles();
+        if (!rows.length) {
+          el.tbody.innerHTML = '<tr><td colspan="6" style="padding:20px;color:#64748b;text-align:center;">暂无数据，先检查筛选条件或稍后重试。</td></tr>';
           return;
         }
+        setHtml(el.tbody, rows.map((row) => {
+          return [
+            '<tr>',
+            '<td><span title="' + escapeHtml(row.name) + '">' + escapeHtml(row.name) + '</span></td>',
+            '<td>' + formatSize(row.size) + '</td>',
+            '<td>' + escapeHtml(row.typeLabel) + '</td>',
+            '<td>' + formatTime(row.uploadTime) + '</td>',
+            '<td>' + renderStatus(row.status) + '</td>',
+            '<td>' + renderActions(row) + '</td>',
+            '</tr>'
+          ].join('');
+        }).join(''));
+      }
 
-        table = new Tabulator('#fileTable', {
-          data: [],
-          layout: 'fitColumns',
-          pagination: 'local',
-          paginationSize: getPageSizeValue(),
-          placeholder: '暂无数据，先检查筛选条件或稍后重试。',
-          columnHeaderVertAlign: 'middle',
-          initialSort: [{ column: 'uploadTime', dir: 'desc' }],
-          columns: [
-            { title: '文件名', field: 'name', sorter: 'string', minWidth: 280, formatter: (cell) => {
-                const value = cell.getValue() || '未命名';
-                return '<span title=\"' + escapeHtml(value) + '\">' + escapeHtml(value) + '</span>';
-              }
-            },
-            { title: '大小', field: 'size', sorter: 'number', hozAlign: 'right', formatter: (cell) => formatSize(Number(cell.getValue()) || 0), width: 120 },
-            { title: '类型', field: 'typeLabel', sorter: 'string', width: 120 },
-            { title: '上传时间', field: 'uploadTime', sorter: 'number', minWidth: 180, formatter: (cell) => formatTime(cell.getValue()) },
-            { title: '状态', field: 'status', width: 120, formatter: renderStatus },
-            { title: '操作', field: 'uid', hozAlign: 'left', headerSort: false, widthGrow: 1, formatter: renderActions }
-          ]
+      function renderSortIndicators() {
+        const headers = document.querySelectorAll('#fileTable thead th.sortable');
+        headers.forEach((th) => {
+          th.classList.remove('sort-active-asc', 'sort-active-desc');
+          if (th.dataset.sort === sortBy) {
+            th.classList.add(sortDirection === 'asc' ? 'sort-active-asc' : 'sort-active-desc');
+          }
         });
-
-        if (typeof table.on === 'function') {
-          table.on('sortChanged', () => {
-            updateStats();
-            updatePager();
-          });
-          table.on('pageLoaded', () => {
-            updateStats();
-            updatePager();
-          });
-        }
       }
 
       async function copyText(text) {
@@ -472,14 +502,12 @@ function getAdminScript() {
       }
 
       function applyFilters() {
-        filteredFiles = getFilteredFiles();
-        buildFileMap(filteredFiles);
-        if (table) {
-          table.replaceData(filteredFiles);
-          table.setPage(1);
-        }
+        filteredFiles = sortFiles(getFilteredFiles());
+        currentPage = 1;
         updateStats();
         updatePager();
+        renderSortIndicators();
+        renderTable();
       }
 
       async function loadFiles() {
@@ -526,10 +554,9 @@ function getAdminScript() {
         }
         if (el.controls.pageSize) {
           el.controls.pageSize.addEventListener('change', (event) => {
-            const pageSize = Number(event.target.value) || getPageSizeValue();
-            if (table && typeof table.setPageSize === 'function') {
-              table.setPageSize(pageSize);
-            }
+            const selectedPageSize = Number(event.target.value) || getPageSizeValue();
+            pageSize = selectedPageSize;
+            currentPage = 1;
             applyFilters();
           });
         }
@@ -538,50 +565,65 @@ function getAdminScript() {
         }
         if (el.controls.firstPageBtn) {
           el.controls.firstPageBtn.addEventListener('click', () => {
-            if (!table) return;
-            table.setPage(1);
+            currentPage = 1;
             updateStats();
             updatePager();
+            renderTable();
           });
         }
         if (el.controls.prevPageBtn) {
           el.controls.prevPageBtn.addEventListener('click', () => {
-            if (!table) return;
-            const current = getCurrentTablePage();
-            if (current > 1) {
-              table.setPage(current - 1);
+            if (currentPage > 1) {
+              currentPage -= 1;
               updateStats();
               updatePager();
+              renderTable();
             }
           });
         }
         if (el.controls.nextPageBtn) {
           el.controls.nextPageBtn.addEventListener('click', () => {
-            if (!table) return;
-            const current = getCurrentTablePage();
             const total = getMaxTablePage();
-            if (current < total) {
-              table.setPage(current + 1);
+            if (currentPage < total) {
+              currentPage += 1;
               updateStats();
               updatePager();
+              renderTable();
             }
           });
         }
         if (el.controls.lastPageBtn) {
           el.controls.lastPageBtn.addEventListener('click', () => {
-            if (!table) return;
-            table.setPage(getMaxTablePage());
+            currentPage = getMaxTablePage();
             updateStats();
             updatePager();
+            renderTable();
           });
         }
-        const tableWrap = document.getElementById('fileTable');
-        if (tableWrap) {
-          tableWrap.addEventListener('click', async (event) => {
+        const headers = document.querySelectorAll('#fileTable thead th.sortable');
+        headers.forEach((th) => {
+          th.addEventListener('click', () => {
+            const nextSort = th.dataset.sort || 'uploadTime';
+            if (sortBy === nextSort) {
+              sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+              sortBy = nextSort;
+              sortDirection = nextSort === 'name' || nextSort === 'typeLabel' ? 'asc' : 'desc';
+            }
+            filteredFiles = sortFiles(getFilteredFiles());
+            currentPage = 1;
+            updateStats();
+            updatePager();
+            renderSortIndicators();
+            renderTable();
+          });
+        }
+        if (el.tbody) {
+          el.tbody.addEventListener('click', async (event) => {
             const copyBtn = event.target.closest('.admin-copy-btn');
             if (!copyBtn) return;
             const uid = copyBtn.getAttribute('data-uid');
-            const row = fileMap.get(uid);
+            const row = filteredFiles.find((item) => item.uid === uid);
             if (!row || !row.url) {
               showToast('该记录未存储可复制链接');
               return;
@@ -592,7 +634,6 @@ function getAdminScript() {
       }
 
       function renderInitial() {
-        initTable();
         bindEvents();
         loadFiles();
       }
@@ -615,12 +656,10 @@ function getAdminHTML() {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>管理后台</title>
     <link rel="stylesheet" href="/style.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.0/dist/css/tabulator.min.css">
     <style>${getAdminStyles()}</style>
   </head>
   <body>
     ${getAdminShell()}
-    <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
     <script>
       ${getAdminScript()}
     </script>

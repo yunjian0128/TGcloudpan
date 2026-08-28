@@ -13,7 +13,6 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "wrangler": "^3.0.0",
-    "tabulator-tables": "^6.3.0"
+    "wrangler": "^3.0.0"
   }
 }
