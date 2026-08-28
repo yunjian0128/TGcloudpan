@@ -79,7 +79,7 @@ function getAdminStyles() {
       .mono{font-family:ui-monospace,SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:.86em;color:#334155;}
       .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
       .btn{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:10px;box-sizing:border-box;border:1px solid #c7d2fe;background:#fff;color:#1e293b;line-height:1.2;font-size:13px;cursor:pointer;white-space:nowrap;transition:transform .15s ease, filter .15s ease, background .15s ease}
-      .btn:hover{background:#f8f9ff}
+      .btn:hover{filter:brightness(1.04)}
       .btn:disabled,.btn[disabled]{opacity:.5;cursor:not-allowed}
       .btn:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(102,126,234,0.15)}
       .btn.btn-primary{background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;border-color:transparent}
