@@ -338,7 +338,7 @@ function getAdminScript() {
       }
 
       function getMaxTablePage() {
-        return Math.max(1, safeCall(() => table.getPageMax(), Math.max(1, Math.ceil(filteredFiles.length / getPageSizeValue())));
+        return Math.max(1, safeCall(() => table.getPageMax(), Math.max(1, Math.ceil(filteredFiles.length / getPageSizeValue()))));
       }
 
       function getTablePageSize() {
