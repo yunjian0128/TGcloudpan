@@ -66,7 +66,7 @@ function getAdminHTML() {
       .toolbar input:focus,.toolbar select:focus{border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,0.12)}
       .toolbar button{padding:8px 12px;border:none;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-radius:10px;cursor:pointer;transition:transform .15s ease, filter .15s ease}
       .toolbar button:hover{filter:brightness(1.04)}
-      .toolbar button:disabled{opacity:.5;cursor:not-allowed;}
+      .toolbar button:disabled{opacity:.5;cursor:not-allowed}
       .stats{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;padding:10px;border:1px solid #eef2ff;border-radius:10px;background:#f8f9ff;color:#334155}
       .stats b{color:#111827}
       .msg{min-height:22px;color:#e53e3e;margin-top:10px;font-size:.94em;}
@@ -85,16 +85,16 @@ function getAdminHTML() {
       .logout{float:right;color:#e53e3e;cursor:pointer;font-size:.95em;}
       .mono{font-family:ui-monospace,SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:.86em;color:#334155;}
       .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-      .action-btn{padding:6px 10px;border:1px solid #c7d2fe;background:#fff;border-radius:8px;cursor:pointer;color:#1e293b}
-      .action-btn:hover{background:#f8f9ff}
+      .admin-btn,.action-btn,.pager button{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:10px;box-sizing:border-box;border:1px solid #c7d2fe;background:#fff;color:#1e293b;line-height:1.2;font-size:13px;cursor:pointer;transition:transform .15s ease, filter .15s ease, background .15s ease}
+      .admin-btn:hover,.action-btn:hover{background:#f8f9ff}
+      .admin-btn:disabled,.action-btn:disabled{opacity:.5;cursor:not-allowed}
+      .admin-btn:focus-visible,.action-btn:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(102,126,234,0.15)}
       .action-btn.primary{background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;border-color:transparent}
       .action-btn.primary:hover{filter:brightness(1.05)}
-      .action-btn:disabled{opacity:.5;cursor:not-allowed}
       .action-btn.muted{opacity:.45;cursor:not-allowed}
       .status-pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:12px}
       .pagination{display:flex;align-items:center;justify-content:space-between;margin-top:12px;gap:8px;flex-wrap:wrap;}
       .pagination .pager{display:flex;gap:8px;}
-      .pager button{padding:7px 12px;}
       .pager button.active{background:#334155;}
       .toast{position:fixed;right:16px;top:16px;background:#1f2937;color:#fff;border-radius:8px;padding:8px 12px;font-size:13px;display:none;z-index:1000}
       .loading{color:#64748b;margin-top:16px;}
@@ -119,7 +119,7 @@ function getAdminHTML() {
             <option value="20" selected>20 条/页</option>
             <option value="50">50 条/页</option>
           </select>
-          <button id="refreshBtn">刷新</button>
+          <button id="refreshBtn" class="admin-btn">刷新</button>
         </div>
       </div>
       <div class="stats" id="stats">
@@ -149,10 +149,10 @@ function getAdminHTML() {
       <div class="pagination">
         <span id="pageInfo" class="sub-msg"></span>
         <div class="pager">
-          <button id="firstPageBtn">首页</button>
-          <button id="prevBtn">上一页</button>
-          <button id="nextBtn">下一页</button>
-          <button id="lastPageBtn">末页</button>
+          <button id="firstPageBtn" class="admin-btn">首页</button>
+          <button id="prevBtn" class="admin-btn">上一页</button>
+          <button id="nextBtn" class="admin-btn">下一页</button>
+          <button id="lastPageBtn" class="admin-btn">末页</button>
         </div>
       </div>
     </div>
