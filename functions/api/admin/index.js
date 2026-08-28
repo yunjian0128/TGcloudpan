@@ -64,15 +64,13 @@ function getAdminStyles() {
       .stats b{color:#111827}
       .msg{min-height:22px;color:#e53e3e;margin-top:10px;font-size:.94em;}
       .sub-msg{margin-top:8px;font-size:.9em;color:#64748b;}
-      .table-wrap{overflow-x:auto;margin-top:12px;border:1px solid #ecf0ff;border-radius:12px}
-      table{width:100%;border-collapse:collapse;min-width:860px;background:#fff}
-      th,td{padding:12px 10px;border-bottom:1px solid #eef2f7;text-align:left;vertical-align:middle;word-break:break-all;}
-      th{background:#f8f9ff;cursor:pointer;white-space:nowrap;}
-      th.sortable::after{content:'↕';font-size:12px;color:#94a3b8;margin-left:6px;}
-      th.sort-active-asc::after{content:'↑';color:#334155;}
-      th.sort-active-desc::after{content:'↓';color:#334155;}
-      tbody tr:hover{background:#f8f9ff;}
-      tbody tr{transition:background .15s ease}
+      .table-wrap{margin-top:12px;}
+      .tabulator{border:1px solid #ecf0ff;border-radius:12px;overflow:hidden;}
+      .tabulator .tabulator-header{background:#f8f9ff;color:#334155;}
+      .tabulator .tabulator-col{background:transparent;}
+      .tabulator .tabulator-row{min-height:44px;}
+      .tabulator .tabulator-row.tabulator-row-even{background:#fcfdff;}
+      .tabulator .tabulator-row:hover{background:#f8f9ff;}
       a{color:#667eea;text-decoration:none}
       a:hover{text-decoration:underline}
       .logout{float:right;color:#e53e3e;cursor:pointer;font-size:.95em;}
@@ -145,19 +143,7 @@ function getAdminStats() {
 function getAdminTable() {
   return `
       <div class="table-wrap">
-        <table id="fileTable">
-          <thead>
-            <tr>
-              <th class="sortable" data-sort="name">文件名</th>
-              <th class="sortable" data-sort="size">大小</th>
-              <th class="sortable" data-sort="type">类型</th>
-              <th class="sortable" data-sort="uploadTime">上传时间</th>
-              <th>状态</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="fileTableBody"></tbody>
-        </table>
+        <div id="fileTable"></div>
       </div>
     `.trim();
 }
@@ -189,10 +175,8 @@ function getAdminScript() {
   return `
       let allFiles = [];
       let filteredFiles = [];
-      let sortBy = 'uploadTime';
-      let sortDirection = 'desc';
-      let currentPage = 1;
-      let pageSize = 20;
+      let table;
+      const fileMap = new Map();
 
       const state = {
         loading: true,
@@ -200,7 +184,6 @@ function getAdminScript() {
       };
 
       const el = {
-        tbody: document.querySelector('#fileTableBody'),
         msg: document.getElementById('msg'),
         loadingText: document.getElementById('loadingText'),
         stats: {
@@ -216,8 +199,8 @@ function getAdminScript() {
           pageSize: document.getElementById('pageSize'),
           refresh: document.getElementById('refreshBtn'),
           firstPageBtn: document.getElementById('firstPageBtn'),
-          prevBtn: document.getElementById('prevBtn'),
-          nextBtn: document.getElementById('nextBtn'),
+          prevPageBtn: document.getElementById('prevBtn'),
+          nextPageBtn: document.getElementById('nextBtn'),
           lastPageBtn: document.getElementById('lastPageBtn'),
           subInfo: document.getElementById('subInfo'),
           toast: document.getElementById('toast')
@@ -227,11 +210,6 @@ function getAdminScript() {
       function setText(node, text) {
         if (!node) return;
         node.innerText = String(text || '');
-      }
-
-      function setHtml(node, html) {
-        if (!node) return;
-        node.innerHTML = String(html || '');
       }
 
       function setDisplay(node, value) {
@@ -264,15 +242,6 @@ function getAdminScript() {
         if (fileType.startsWith('audio/')) return 'audio';
         if (fileType === 'application/pdf' || fileType.includes('text/') || fileType.includes('application/vnd') || fileType.includes('application/')) return 'document';
         return 'other';
-      }
-
-      function showToast(msg) {
-        setText(el.controls.toast, msg);
-        setDisplay(el.controls.toast, 'block');
-        clearTimeout(window.__adminToastTimer);
-        window.__adminToastTimer = setTimeout(() => {
-          setDisplay(el.controls.toast, 'none');
-        }, 1700);
       }
 
       function formatSize(bytes) {
@@ -309,146 +278,175 @@ function getAdminScript() {
         return isValidProxyTarget(file.url) ? '正常' : '非预期链接';
       }
 
+      function safeCall(handler, fallback) {
+        try {
+          return handler();
+        } catch (e) {
+          return fallback;
+        }
+      }
+
+      function showToast(msg) {
+        setText(el.controls.toast, msg);
+        setDisplay(el.controls.toast, 'block');
+        clearTimeout(window.__adminToastTimer);
+        window.__adminToastTimer = setTimeout(() => {
+          setDisplay(el.controls.toast, 'none');
+        }, 1700);
+      }
+
+      function getPageSizeValue() {
+        const pageSize = Number(getValue(el.controls.pageSize, '20'));
+        return Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 20;
+      }
+
+      function hydrateFile(file, index) {
+        return {
+          uid: String(index),
+          name: file && file.name ? file.name : '未命名',
+          size: Number(file && file.size) || 0,
+          type: file && file.type ? file.type : 'unknown',
+          typeLabel: detectType(file && file.type ? file.type : ''),
+          uploadTime: Number(file && file.uploadTime) || 0,
+          url: file && file.url ? file.url : '',
+          proxyUrl: buildProxyUrl(file),
+          status: getStatus(file)
+        };
+      }
+
+      function buildFileMap(rows) {
+        fileMap.clear();
+        rows.forEach((row) => {
+          if (!row || !row.uid) return;
+          fileMap.set(row.uid, row);
+        });
+      }
+
       function getFilteredFiles() {
         const keyword = (getValue(el.controls.search).trim() || '').toLowerCase();
         const typeFilter = getValue(el.controls.typeFilter, 'all') || 'all';
-        const matched = allFiles.filter((f) => {
-          const name = (f.name || '').toLowerCase();
+        return allFiles.filter((file) => {
+          const name = (file.name || '').toLowerCase();
           if (keyword && !name.includes(keyword)) return false;
-          if (typeFilter !== 'all') {
-            return detectType(f.type || '') === typeFilter;
-          }
+          if (typeFilter !== 'all' && file.typeLabel !== typeFilter) return false;
           return true;
         });
-        return matched.sort((a, b) => {
-          const va = a[sortBy];
-          const vb = b[sortBy];
-          const direction = sortDirection === 'asc' ? 1 : -1;
-          if (sortBy === 'name' || sortBy === 'type') {
-            return direction * String(va || '').localeCompare(String(vb || ''));
-          }
-          if (sortBy === 'uploadTime' || sortBy === 'size') {
-            return direction * ((Number(va) || 0) - (Number(vb) || 0));
-          }
-          return 0;
-        });
       }
 
-      function updateStats() {
-        const filteredSize = filteredFiles.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
-        const totalPages = Math.max(1, Math.ceil(filteredFiles.length / pageSize));
-        if (currentPage > totalPages) currentPage = totalPages;
-        setText(el.stats.totalCount, String(allFiles.length));
-        setText(el.stats.filteredCount, String(filteredFiles.length));
-        setText(el.stats.filteredSize, formatSize(filteredSize));
-        setText(el.stats.currentPageText, currentPage + ' / ' + totalPages);
-        setText(
-          el.controls.pageInfo,
-          filteredFiles.length
-            ? '共 ' + filteredFiles.length + ' 条，当前显示 ' + startIndex() + '-' + endIndex() + ' 条'
-            : '共 0 条'
-        );
-        setText(
-          el.controls.subInfo,
-          sortBy === 'uploadTime'
-            ? '当前排序：上传时间 ' + (sortDirection === 'asc' ? '升序' : '降序')
-            : '当前排序：' + sortBy + ' ' + (sortDirection === 'asc' ? '升序' : '降序')
-        );
+      function getCurrentTablePage() {
+        return safeCall(() => table.getPage(), 1) || 1;
       }
 
-      function startIndex() {
-        if (!filteredFiles.length) return 0;
-        return (currentPage - 1) * pageSize + 1;
+      function getMaxTablePage() {
+        return Math.max(1, safeCall(() => table.getPageMax(), Math.max(1, Math.ceil(filteredFiles.length / getPageSizeValue())));
       }
 
-      function endIndex() {
-        if (!filteredFiles.length) return 0;
-        return Math.min(currentPage * pageSize, filteredFiles.length);
+      function getTablePageSize() {
+        return safeCall(() => table.getPageSize(), getPageSizeValue());
       }
 
       function updatePager() {
-        const totalPages = Math.max(1, Math.ceil(filteredFiles.length / pageSize));
+        const currentPage = getCurrentTablePage();
+        const totalPages = getMaxTablePage();
         setDisabled(el.controls.firstPageBtn, currentPage <= 1);
-        setDisabled(el.controls.prevBtn, currentPage <= 1);
-        setDisabled(el.controls.nextBtn, currentPage >= totalPages);
+        setDisabled(el.controls.prevPageBtn, currentPage <= 1);
+        setDisabled(el.controls.nextPageBtn, currentPage >= totalPages);
         setDisabled(el.controls.lastPageBtn, currentPage >= totalPages);
       }
 
-      const AdminComponents = {
-        statusPill(status) {
-          return '<span class=\"status-pill\">' + escapeHtml(status) + '</span>';
-        },
-        fileName(file) {
-          const safeName = escapeHtml(file.name || '未命名');
-          return '<td><span title=\"' + safeName + '\">' + safeName + '</span></td>';
-        },
-        fileType(file) {
-          return '<td>' + escapeHtml(file.type || 'unknown') + '</td>';
-        },
-        fileSize(file) {
-          return '<td>' + formatSize(Number(file.size) || 0) + '</td>';
-        },
-        uploadTime(file) {
-          return '<td>' + formatTime(file.uploadTime) + '</td>';
-        },
-        action(file, idx, proxyLink) {
-          const canDownload = Boolean(proxyLink);
-          const canCopy = Boolean(file.url);
-          const downloadBtn = canDownload
-            ? '<a class=\"btn btn-primary\" href=\"' + proxyLink + '\" target=\"_blank\">下载</a>'
-            : '<button class=\"btn btn-muted\" type=\"button\" disabled>不可下载</button>';
-          const copyBtn = '<button type=\"button\" class=\"btn\" data-copy-idx=\"' + idx + '\" ' + (canCopy ? '' : 'disabled') + '>' + (canCopy ? '复制链接' : '无链接') + '</button>';
-          return '<td class=\"actions\">' + downloadBtn + copyBtn + '</td>';
-        },
-        emptyRow() {
-          return '<tr><td colspan=\"6\">暂无数据，先检查筛选条件或稍后重试。</td></tr>';
-        },
-        fileRow(file, index) {
-          const proxyLink = buildProxyUrl(file);
-          return '<tr>' +
-            this.fileName(file) +
-            this.fileSize(file) +
-            this.fileType(file) +
-            this.uploadTime(file) +
-            '<td>' + this.statusPill(getStatus(file)) + '</td>' +
-            this.action(file, index, proxyLink) +
-            '</tr>';
+      function getSortLabel(sorters) {
+        if (!Array.isArray(sorters) || !sorters.length) {
+          return '上传时间 降序';
         }
-      };
-
-      function render() {
-        setDisplay(el.loadingText, 'none');
-        setText(el.msg, state.error || '');
-        filteredFiles = getFilteredFiles();
-        if (!el.tbody) return;
-        if (!filteredFiles.length) {
-          setHtml(el.tbody, AdminComponents.emptyRow());
-        } else {
-          const start = (currentPage - 1) * pageSize;
-          const end = start + pageSize;
-          const pageRows = filteredFiles.slice(start, end);
-          const rows = pageRows.map((file, index) => AdminComponents.fileRow(file, start + index)).join('');
-          setHtml(el.tbody, rows);
-        }
-        updateStats();
-        updatePager();
-        setActiveSortHeader();
+        const field = sorters[0].field;
+        const dir = sorters[0].dir === 'asc' ? '升序' : '降序';
+        const labels = {
+          name: '文件名',
+          size: '大小',
+          typeLabel: '类型',
+          uploadTime: '上传时间',
+          status: '状态'
+        };
+        return '当前排序：' + (labels[field] || field || '未定义') + ' ' + dir;
       }
 
-      function setActiveSortHeader() {
-        document.querySelectorAll('th.sortable').forEach((th) => {
-          th.classList.remove('sort-active-asc');
-          th.classList.remove('sort-active-desc');
-          if (th.getAttribute('data-sort') === sortBy) {
-            th.classList.add(sortDirection === 'asc' ? 'sort-active-asc' : 'sort-active-desc');
-          }
+      function updateStats() {
+        const pageSize = getTablePageSize();
+        const totalPages = getMaxTablePage();
+        const currentPage = getCurrentTablePage();
+        const sorters = safeCall(() => table.getSorters(), []);
+
+        const filteredSize = filteredFiles.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
+        const totalCount = allFiles.length;
+        const filteredCount = filteredFiles.length;
+        const start = filteredCount ? ((currentPage - 1) * pageSize + 1) : 0;
+        const end = Math.min(currentPage * pageSize, filteredCount);
+
+        setText(el.stats.totalCount, String(totalCount));
+        setText(el.stats.filteredCount, String(filteredCount));
+        setText(el.stats.filteredSize, formatSize(filteredSize));
+        setText(el.stats.currentPageText, String(currentPage) + ' / ' + String(totalPages));
+        setText(el.pageInfo, filteredCount ? '共 ' + filteredCount + ' 条，当前显示 ' + start + '-' + end + ' 条' : '共 0 条');
+        setText(el.controls.subInfo, getSortLabel(sorters));
+      }
+
+      function renderActions(cell) {
+        const rowData = cell.getData() || {};
+        const canDownload = Boolean(rowData.proxyUrl);
+        const canCopy = Boolean(rowData.url);
+        const downloadBtn = canDownload
+          ? '<a class=\"btn btn-primary\" href=\"' + escapeHtml(rowData.proxyUrl) + '\" target=\"_blank\" rel=\"noreferrer\">下载</a>'
+          : '<button class=\"btn btn-muted\" type=\"button\" disabled>不可下载</button>';
+        const copyBtn = canCopy
+          ? '<button class=\"btn admin-copy-btn\" type=\"button\" data-uid=\"' + escapeHtml(rowData.uid) + '\">复制链接</button>'
+          : '<button class=\"btn\" type=\"button\" disabled>无链接</button>';
+        return '<div class=\"actions\">' + downloadBtn + copyBtn + '</div>';
+      }
+
+      function renderStatus(cell) {
+        return '<span class=\"status-pill\">' + escapeHtml(cell.getValue() || '') + '</span>';
+      }
+
+      function initTable() {
+        if (!window.Tabulator) {
+          setStateError('Tabulator 加载失败，请检查 CDN 可访问性');
+          setDisplay(el.loadingText, 'block');
+          setText(el.loadingText, '页面组件加载失败，请稍后重试。');
+          return;
+        }
+
+        table = new Tabulator('#fileTable', {
+          data: [],
+          layout: 'fitColumns',
+          pagination: 'local',
+          paginationSize: getPageSizeValue(),
+          placeholder: '暂无数据，先检查筛选条件或稍后重试。',
+          columnHeaderVertAlign: 'middle',
+          initialSort: [{ column: 'uploadTime', dir: 'desc' }],
+          columns: [
+            { title: '文件名', field: 'name', sorter: 'string', minWidth: 280, formatter: (cell) => {
+                const value = cell.getValue() || '未命名';
+                return '<span title=\"' + escapeHtml(value) + '\">' + escapeHtml(value) + '</span>';
+              }
+            },
+            { title: '大小', field: 'size', sorter: 'number', hozAlign: 'right', formatter: (cell) => formatSize(Number(cell.getValue()) || 0), width: 120 },
+            { title: '类型', field: 'typeLabel', sorter: 'string', width: 120 },
+            { title: '上传时间', field: 'uploadTime', sorter: 'number', minWidth: 180, formatter: (cell) => formatTime(cell.getValue()) },
+            { title: '状态', field: 'status', width: 120, formatter: renderStatus },
+            { title: '操作', field: 'uid', hozAlign: 'left', headerSort: false, widthGrow: 1, formatter: renderActions }
+          ]
         });
-      }
 
-      function setStateError(msg) {
-        state.error = msg || '';
-        state.loading = false;
-        setText(el.msg, state.error);
+        if (typeof table.on === 'function') {
+          table.on('sortChanged', () => {
+            updateStats();
+            updatePager();
+          });
+          table.on('pageLoaded', () => {
+            updateStats();
+            updatePager();
+          });
+        }
       }
 
       async function copyText(text) {
@@ -473,6 +471,17 @@ function getAdminScript() {
         }
       }
 
+      function applyFilters() {
+        filteredFiles = getFilteredFiles();
+        buildFileMap(filteredFiles);
+        if (table) {
+          table.replaceData(filteredFiles);
+          table.setPage(1);
+        }
+        updateStats();
+        updatePager();
+      }
+
       async function loadFiles() {
         setStateError('');
         setDisplay(el.loadingText, 'block');
@@ -481,111 +490,111 @@ function getAdminScript() {
           const res = await fetch('/api/admin/files');
           if (!res.ok) {
             setStateError('无法获取文件列表（状态 ' + res.status + '）');
-            state.loading = false;
-            setDisplay(el.loadingText, 'none');
-            render();
+            allFiles = [];
+            filteredFiles = [];
+            applyFilters();
             return;
           }
           const data = await res.json();
-          allFiles = Array.isArray(data.files) ? data.files : [];
-          state.loading = false;
+          const list = Array.isArray(data.files) ? data.files : [];
+          allFiles = list.map((file, index) => hydrateFile(file, index));
           setDisplay(el.loadingText, 'none');
-          filteredFiles = getFilteredFiles();
-          currentPage = 1;
-          render();
+          applyFilters();
         } catch (e) {
           setStateError('加载失败：' + (e && e.message ? e.message : '网络错误'));
-          state.loading = false;
-          setDisplay(el.loadingText, 'none');
           allFiles = [];
           filteredFiles = [];
-          render();
+          applyFilters();
+        } finally {
+          state.loading = false;
+          setDisplay(el.loadingText, 'none');
         }
+      }
+
+      function setStateError(msg) {
+        state.error = msg || '';
+        state.loading = false;
+        setText(el.msg, state.error);
       }
 
       function bindEvents() {
         if (el.controls.search) {
-          el.controls.search.addEventListener('input', () => {
-            currentPage = 1;
-            render();
-          });
+          el.controls.search.addEventListener('input', () => applyFilters());
         }
         if (el.controls.typeFilter) {
-          el.controls.typeFilter.addEventListener('change', () => {
-            currentPage = 1;
-            render();
-          });
+          el.controls.typeFilter.addEventListener('change', () => applyFilters());
         }
         if (el.controls.pageSize) {
-          el.controls.pageSize.addEventListener('change', (e) => {
-            pageSize = Number(e.target.value) || 20;
-            currentPage = 1;
-            render();
+          el.controls.pageSize.addEventListener('change', (event) => {
+            const pageSize = Number(event.target.value) || getPageSizeValue();
+            if (table && typeof table.setPageSize === 'function') {
+              table.setPageSize(pageSize);
+            }
+            applyFilters();
           });
         }
         if (el.controls.refresh) {
           el.controls.refresh.addEventListener('click', loadFiles);
         }
         if (el.controls.firstPageBtn) {
-          el.controls.firstPageBtn.onclick = () => {
-            currentPage = 1;
-            render();
-          };
+          el.controls.firstPageBtn.addEventListener('click', () => {
+            if (!table) return;
+            table.setPage(1);
+            updateStats();
+            updatePager();
+          });
         }
-        if (el.controls.prevBtn) {
-          el.controls.prevBtn.onclick = () => {
-            if (currentPage > 1) {
-              currentPage -= 1;
-              render();
+        if (el.controls.prevPageBtn) {
+          el.controls.prevPageBtn.addEventListener('click', () => {
+            if (!table) return;
+            const current = getCurrentTablePage();
+            if (current > 1) {
+              table.setPage(current - 1);
+              updateStats();
+              updatePager();
             }
-          };
+          });
         }
-        if (el.controls.nextBtn) {
-          el.controls.nextBtn.onclick = () => {
-            const totalPages = Math.max(1, Math.ceil(filteredFiles.length / pageSize));
-            if (currentPage < totalPages) {
-              currentPage += 1;
-              render();
+        if (el.controls.nextPageBtn) {
+          el.controls.nextPageBtn.addEventListener('click', () => {
+            if (!table) return;
+            const current = getCurrentTablePage();
+            const total = getMaxTablePage();
+            if (current < total) {
+              table.setPage(current + 1);
+              updateStats();
+              updatePager();
             }
-          };
+          });
         }
         if (el.controls.lastPageBtn) {
-          el.controls.lastPageBtn.onclick = () => {
-            currentPage = Math.max(1, Math.ceil(filteredFiles.length / pageSize));
-            render();
-          };
+          el.controls.lastPageBtn.addEventListener('click', () => {
+            if (!table) return;
+            table.setPage(getMaxTablePage());
+            updateStats();
+            updatePager();
+          });
         }
-        document.querySelectorAll('th.sortable').forEach((th) => {
-          th.onclick = () => {
-            const targetSort = th.getAttribute('data-sort');
-            if (sortBy === targetSort) {
-              sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-            } else {
-              sortBy = targetSort;
-              sortDirection = 'desc';
-            }
-            render();
-          };
-        });
-        if (el.tbody) {
-          el.tbody.addEventListener('click', (event) => {
-            const btn = event.target.closest('[data-copy-idx]');
-            if (!btn) return;
-            const idx = Number(btn.getAttribute('data-copy-idx'));
-            const file = filteredFiles[idx];
-            if (!file || !file.url) {
+        const tableWrap = document.getElementById('fileTable');
+        if (tableWrap) {
+          tableWrap.addEventListener('click', async (event) => {
+            const copyBtn = event.target.closest('.admin-copy-btn');
+            if (!copyBtn) return;
+            const uid = copyBtn.getAttribute('data-uid');
+            const row = fileMap.get(uid);
+            if (!row || !row.url) {
               showToast('该记录未存储可复制链接');
               return;
             }
-            copyText(file.url);
+            copyText(row.url);
           });
         }
       }
 
       function renderInitial() {
+        initTable();
         bindEvents();
         loadFiles();
-        render();
       }
 
       function logout() {
@@ -593,6 +602,7 @@ function getAdminScript() {
         location.reload();
       }
 
+      window.logout = logout;
       renderInitial();
   `;
 }
@@ -605,10 +615,12 @@ function getAdminHTML() {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>管理后台</title>
     <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.0/dist/css/tabulator.min.css">
     <style>${getAdminStyles()}</style>
   </head>
   <body>
     ${getAdminShell()}
+    <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
     <script>
       ${getAdminScript()}
     </script>
