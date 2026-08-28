@@ -60,28 +60,37 @@ function getAdminHTML() {
     <link rel="stylesheet" href="/style.css">
     <style>
       .container{max-width:1240px;margin:40px auto;padding:24px 20px;background:#fff;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.08);}
-      .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-top:14px;}
+      .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-top:14px}
       .toolbar .group{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-      .toolbar input,.toolbar select{padding:8px 10px;border:1px solid #ddd;border-radius:8px;min-width:180px;}
-      .toolbar button{padding:8px 12px;border:none;background:#667eea;color:#fff;border-radius:8px;cursor:pointer;}
+      .toolbar input,.toolbar select{padding:8px 10px;border:1px solid #dbe0e7;border-radius:8px;min-width:180px;background:#f8fafc;outline:none}
+      .toolbar input:focus,.toolbar select:focus{border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,0.12)}
+      .toolbar button{padding:8px 12px;border:none;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-radius:10px;cursor:pointer;transition:transform .15s ease, filter .15s ease}
+      .toolbar button:hover{filter:brightness(1.04)}
       .toolbar button:disabled{opacity:.5;cursor:not-allowed;}
       .stats{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;padding:10px;border:1px solid #eef2ff;border-radius:10px;background:#f8f9ff;color:#334155}
       .stats b{color:#111827}
       .msg{min-height:22px;color:#e53e3e;margin-top:10px;font-size:.94em;}
       .sub-msg{margin-top:8px;font-size:.9em;color:#64748b;}
-      .table-wrap{overflow-x:auto;margin-top:12px;}
-      table{width:100%;border-collapse:collapse;min-width:900px;}
-      th,td{padding:10px 8px;border-bottom:1px solid #eee;text-align:left;vertical-align:top;word-break:break-all;}
+      .table-wrap{overflow-x:auto;margin-top:12px;border:1px solid #ecf0ff;border-radius:12px}
+      table{width:100%;border-collapse:collapse;min-width:860px;background:#fff}
+      th,td{padding:12px 10px;border-bottom:1px solid #eef2f7;text-align:left;vertical-align:middle;word-break:break-all;}
       th{background:#f8f9ff;cursor:pointer;white-space:nowrap;}
       th.sortable::after{content:'↕';font-size:12px;color:#94a3b8;margin-left:6px;}
       th.sort-active-asc::after{content:'↑';color:#334155;}
       th.sort-active-desc::after{content:'↓';color:#334155;}
+      tbody tr:hover{background:#f8f9ff;}
+      tbody tr{transition:background .15s ease}
       a{color:#667eea;text-decoration:none}
       a:hover{text-decoration:underline}
       .logout{float:right;color:#e53e3e;cursor:pointer;font-size:.95em;}
       .mono{font-family:ui-monospace,SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:.86em;color:#334155;}
-      .action-btn{margin-left:8px;padding:5px 8px;border:1px solid #c7d2fe;background:#fff;border-radius:6px;cursor:pointer}
+      .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+      .action-btn{padding:6px 10px;border:1px solid #c7d2fe;background:#fff;border-radius:8px;cursor:pointer;color:#1e293b;min-width:72px}
       .action-btn:hover{background:#f8f9ff}
+      .action-btn.primary{background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;border-color:transparent}
+      .action-btn.primary:hover{filter:brightness(1.05)}
+      .action-btn:disabled{opacity:.5;cursor:not-allowed}
+      .status-pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:12px}
       .pagination{display:flex;align-items:center;justify-content:space-between;margin-top:12px;gap:8px;flex-wrap:wrap;}
       .pagination .pager{display:flex;gap:8px;}
       .pager button{padding:7px 12px;}
@@ -127,8 +136,8 @@ function getAdminHTML() {
               <th class="sortable" data-sort="size">大小</th>
               <th class="sortable" data-sort="type">类型</th>
               <th class="sortable" data-sort="uploadTime">上传时间</th>
-              <th>下载</th>
-              <th>原始链接</th>
+              <th>状态</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody id="fileTableBody"></tbody>
@@ -265,12 +274,6 @@ function getAdminHTML() {
         }
       }
 
-      function buildShortUrl(rawUrl) {
-        if (!rawUrl || typeof rawUrl !== 'string') return '无';
-        if (rawUrl.length <= 54) return rawUrl;
-        return rawUrl.slice(0, 28) + '...' + rawUrl.slice(-20);
-      }
-
       function getStatus(file) {
         if (!file || !file.url) return '链接缺失';
         return isValidProxyTarget(file.url) ? '正常' : '非预期链接';
@@ -360,24 +363,26 @@ function getAdminHTML() {
             const safeName = escapeHtml(file.name || '未命名');
             const safeType = escapeHtml(file.type || 'unknown');
             const rawUrl = file.url || '';
-            const safeRaw = escapeHtml(rawUrl);
             const status = getStatus(file);
             const proxyLink = buildProxyUrl(file);
-            const shortUrl = buildShortUrl(rawUrl);
             const sizeText = formatSize(Number(file.size) || 0);
             const timeText = formatTime(file.uploadTime);
+            const canDownload = Boolean(proxyLink);
+            const canCopy = Boolean(rawUrl);
             return '' +
               '<tr>' +
               '<td><span title="' + safeName + '">' + safeName + '</span></td>' +
               '<td>' + sizeText + '</td>' +
               '<td>' + safeType + '</td>' +
               '<td>' + timeText + '</td>' +
-              '<td>' +
-              (proxyLink ? '<a href="' + proxyLink + '" target="_blank">下载</a>' : '不可下载') +
-              ' <span class="mono">[' + status + ']</span>' +
-              '</td>' +
-              '<td><div class="mono" title="' + safeRaw + '">' + escapeHtml(shortUrl) + '</div>' +
-              ' <button type="button" class="action-btn" data-copy-idx="' + realIndex + '">' + (rawUrl ? '复制原始链接' : '无可复制链接') + '</button>' +
+              '<td><span class="status-pill">' + status + '</span></td>' +
+              '<td class="actions">' +
+              (canDownload
+                ? '<a class="action-btn primary" href="' + proxyLink + '" target="_blank">下载</a>'
+                : '<span class="action-btn" style="opacity:.45;cursor:not-allowed">不可下载</span>'
+              ) +
+              ' <button type="button" class="action-btn" data-copy-idx="' + realIndex + '" ' +
+              (canCopy ? '' : 'disabled') + '>' + (canCopy ? '复制原始链接' : '无可复制链接') + '</button>' +
               '</td>' +
               '</tr>';
           }).join('');
