@@ -1,4 +1,4 @@
-import { buildSessionCookie, clearLoginFail, createSession, isLoginBlocked, increaseLoginFail, isValidCredentials } from '../_shared/auth.js';
+import { buildSessionCookie, clearLoginFail, createSession, isLoginBlocked, increaseLoginFail, isValidCredentials } from '../../_shared/auth.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
