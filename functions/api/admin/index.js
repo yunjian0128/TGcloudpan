@@ -185,6 +185,30 @@ function getAdminHTML() {
         }
       };
 
+      function setText(node, text) {
+        if (!node) return;
+        node.innerText = String(text || '');
+      }
+
+      function setHtml(node, html) {
+        if (!node) return;
+        node.innerHTML = String(html || '');
+      }
+
+      function setDisplay(node, value) {
+        if (!node) return;
+        node.style.display = value;
+      }
+
+      function setDisabled(node, value) {
+        if (!node) return;
+        node.disabled = !!value;
+      }
+
+      function getValue(node, fallback = '') {
+        return node && typeof node.value === 'string' ? node.value : fallback;
+      }
+
       function escapeHtml(input) {
         return String(input || '')
           .replace(/&/g, '&amp;')
@@ -204,11 +228,11 @@ function getAdminHTML() {
       }
 
       function showToast(msg) {
-        el.controls.toast.innerText = msg;
-        el.controls.toast.style.display = 'block';
+        setText(el.controls.toast, msg);
+        setDisplay(el.controls.toast, 'block');
         clearTimeout(window.__adminToastTimer);
         window.__adminToastTimer = setTimeout(() => {
-          el.controls.toast.style.display = 'none';
+          setDisplay(el.controls.toast, 'none');
         }, 1700);
       }
 
@@ -253,8 +277,8 @@ function getAdminHTML() {
       }
 
       function getFilteredFiles() {
-        const keyword = (el.controls.search.value || '').trim().toLowerCase();
-        const typeFilter = el.controls.typeFilter.value || 'all';
+        const keyword = (getValue(el.controls.search).trim() || '').toLowerCase();
+        const typeFilter = getValue(el.controls.typeFilter, 'all') || 'all';
         const matched = allFiles.filter((f) => {
           const name = (f.name || '').toLowerCase();
           if (keyword && !name.includes(keyword)) return false;
@@ -281,16 +305,22 @@ function getAdminHTML() {
         const filteredSize = filteredFiles.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
         const totalPages = Math.max(1, Math.ceil(filteredFiles.length / pageSize));
         if (currentPage > totalPages) currentPage = totalPages;
-        el.stats.totalCount.innerText = String(allFiles.length);
-        el.stats.filteredCount.innerText = String(filteredFiles.length);
-        el.stats.filteredSize.innerText = formatSize(filteredSize);
-        el.stats.currentPageText.innerText = currentPage + ' / ' + totalPages;
-        el.controls.pageInfo.innerText = filteredFiles.length
-          ? '共 ' + filteredFiles.length + ' 条，当前显示 ' + startIndex() + '-' + endIndex() + ' 条'
-          : '共 0 条';
-        el.controls.subInfo.innerText = sortBy === 'uploadTime'
-          ? '当前排序：上传时间 ' + (sortDirection === 'asc' ? '升序' : '降序')
-          : '当前排序：' + sortBy + ' ' + (sortDirection === 'asc' ? '升序' : '降序');
+        setText(el.stats.totalCount, String(allFiles.length));
+        setText(el.stats.filteredCount, String(filteredFiles.length));
+        setText(el.stats.filteredSize, formatSize(filteredSize));
+        setText(el.stats.currentPageText, currentPage + ' / ' + totalPages);
+        setText(
+          el.controls.pageInfo,
+          filteredFiles.length
+            ? '共 ' + filteredFiles.length + ' 条，当前显示 ' + startIndex() + '-' + endIndex() + ' 条'
+            : '共 0 条'
+        );
+        setText(
+          el.controls.subInfo,
+          sortBy === 'uploadTime'
+            ? '当前排序：上传时间 ' + (sortDirection === 'asc' ? '升序' : '降序')
+            : '当前排序：' + sortBy + ' ' + (sortDirection === 'asc' ? '升序' : '降序')
+        );
       }
 
       function startIndex() {
@@ -305,18 +335,22 @@ function getAdminHTML() {
 
       function updatePager() {
         const totalPages = Math.max(1, Math.ceil(filteredFiles.length / pageSize));
-        el.controls.firstPageBtn.disabled = currentPage <= 1;
-        el.controls.prevBtn.disabled = currentPage <= 1;
-        el.controls.nextBtn.disabled = currentPage >= totalPages;
-        el.controls.lastPageBtn.disabled = currentPage >= totalPages;
+        setDisabled(el.controls.firstPageBtn, currentPage <= 1);
+        setDisabled(el.controls.prevBtn, currentPage <= 1);
+        setDisabled(el.controls.nextBtn, currentPage >= totalPages);
+        setDisabled(el.controls.lastPageBtn, currentPage >= totalPages);
       }
 
       function render() {
-        el.loadingText.style.display = 'none';
-        el.msg.innerText = state.error || '';
+        setDisplay(el.loadingText, 'none');
+        setText(el.msg, state.error || '');
         filteredFiles = getFilteredFiles();
+        if (!el.tbody) return;
         if (!filteredFiles.length) {
-          el.tbody.innerHTML = '<tr><td colspan="6">暂无数据，先检查筛选条件或稍后重试。</td></tr>';
+          setHtml(
+            el.tbody,
+            '<tr><td colspan="6">暂无数据，先检查筛选条件或稍后重试。</td></tr>'
+          );
         } else {
           const start = (currentPage - 1) * pageSize;
           const end = start + pageSize;
@@ -347,7 +381,7 @@ function getAdminHTML() {
               '</td>' +
               '</tr>';
           }).join('');
-          el.tbody.innerHTML = rows;
+          setHtml(el.tbody, rows);
         }
         updateStats();
         updatePager();
@@ -367,7 +401,7 @@ function getAdminHTML() {
       function setStateError(msg) {
         state.error = msg || '';
         state.loading = false;
-        el.msg.innerText = state.error;
+        setText(el.msg, state.error);
       }
 
       async function copyText(text) {
@@ -394,28 +428,28 @@ function getAdminHTML() {
 
       async function loadFiles() {
         setStateError('');
-        el.loadingText.style.display = 'block';
-        el.loadingText.innerText = '正在加载文件列表...';
+        setDisplay(el.loadingText, 'block');
+        setText(el.loadingText, '正在加载文件列表...');
         try {
           const res = await fetch('/api/admin/files');
           if (!res.ok) {
             setStateError('无法获取文件列表（状态 ' + res.status + '）');
             state.loading = false;
-            el.loadingText.style.display = 'none';
+            setDisplay(el.loadingText, 'none');
             render();
             return;
           }
           const data = await res.json();
           allFiles = Array.isArray(data.files) ? data.files : [];
           state.loading = false;
-          el.loadingText.style.display = 'none';
+          setDisplay(el.loadingText, 'none');
           filteredFiles = getFilteredFiles();
           currentPage = 1;
           render();
         } catch (e) {
           setStateError('加载失败：' + (e && e.message ? e.message : '网络错误'));
           state.loading = false;
-          el.loadingText.style.display = 'none';
+          setDisplay(el.loadingText, 'none');
           allFiles = [];
           filteredFiles = [];
           render();
@@ -423,41 +457,57 @@ function getAdminHTML() {
       }
 
       function bindEvents() {
-        el.controls.search.addEventListener('input', () => {
-          currentPage = 1;
-          render();
-        });
-        el.controls.typeFilter.addEventListener('change', () => {
-          currentPage = 1;
-          render();
-        });
-        el.controls.pageSize.addEventListener('change', (e) => {
-          pageSize = Number(e.target.value) || 20;
-          currentPage = 1;
-          render();
-        });
-        el.controls.refresh.addEventListener('click', loadFiles);
-        el.controls.firstPageBtn.onclick = () => {
-          currentPage = 1;
-          render();
-        };
-        el.controls.prevBtn.onclick = () => {
-          if (currentPage > 1) {
-            currentPage -= 1;
+        if (el.controls.search) {
+          el.controls.search.addEventListener('input', () => {
+            currentPage = 1;
             render();
-          }
-        };
-        el.controls.nextBtn.onclick = () => {
-          const totalPages = Math.max(1, Math.ceil(filteredFiles.length / pageSize));
-          if (currentPage < totalPages) {
-            currentPage += 1;
+          });
+        }
+        if (el.controls.typeFilter) {
+          el.controls.typeFilter.addEventListener('change', () => {
+            currentPage = 1;
             render();
-          }
-        };
-        el.controls.lastPageBtn.onclick = () => {
-          currentPage = Math.max(1, Math.ceil(filteredFiles.length / pageSize));
-          render();
-        };
+          });
+        }
+        if (el.controls.pageSize) {
+          el.controls.pageSize.addEventListener('change', (e) => {
+            pageSize = Number(e.target.value) || 20;
+            currentPage = 1;
+            render();
+          });
+        }
+        if (el.controls.refresh) {
+          el.controls.refresh.addEventListener('click', loadFiles);
+        }
+        if (el.controls.firstPageBtn) {
+          el.controls.firstPageBtn.onclick = () => {
+            currentPage = 1;
+            render();
+          };
+        }
+        if (el.controls.prevBtn) {
+          el.controls.prevBtn.onclick = () => {
+            if (currentPage > 1) {
+              currentPage -= 1;
+              render();
+            }
+          };
+        }
+        if (el.controls.nextBtn) {
+          el.controls.nextBtn.onclick = () => {
+            const totalPages = Math.max(1, Math.ceil(filteredFiles.length / pageSize));
+            if (currentPage < totalPages) {
+              currentPage += 1;
+              render();
+            }
+          };
+        }
+        if (el.controls.lastPageBtn) {
+          el.controls.lastPageBtn.onclick = () => {
+            currentPage = Math.max(1, Math.ceil(filteredFiles.length / pageSize));
+            render();
+          };
+        }
         document.querySelectorAll('th.sortable').forEach((th) => {
           th.onclick = () => {
             const targetSort = th.getAttribute('data-sort');
@@ -470,17 +520,19 @@ function getAdminHTML() {
             render();
           };
         });
-        document.getElementById('fileTableBody').addEventListener('click', (event) => {
-          const btn = event.target.closest('[data-copy-idx]');
-          if (!btn) return;
-          const idx = Number(btn.getAttribute('data-copy-idx'));
-          const file = filteredFiles[idx];
-          if (!file || !file.url) {
-            showToast('该记录未存储可复制链接');
-            return;
-          }
-          copyText(file.url);
-        });
+        if (el.tbody) {
+          el.tbody.addEventListener('click', (event) => {
+            const btn = event.target.closest('[data-copy-idx]');
+            if (!btn) return;
+            const idx = Number(btn.getAttribute('data-copy-idx'));
+            const file = filteredFiles[idx];
+            if (!file || !file.url) {
+              showToast('该记录未存储可复制链接');
+              return;
+            }
+            copyText(file.url);
+          });
+        }
       }
 
       function renderInitial() {
