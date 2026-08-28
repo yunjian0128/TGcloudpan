@@ -1,5 +1,6 @@
 // Cloudflare Pages Functions API - 文件上传处理
 // 环境变量: TG_TOKEN (Telegram Bot Token), TG_PD (Telegram Channel ID)
+import { requireSession } from '../_shared/auth.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -12,6 +13,17 @@ export async function onRequestPost(context) {
   };
 
   try {
+    const isAuth = await requireSession(env, request);
+    if (!isAuth) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      });
+    }
+
     const formData = await request.formData();
     const file = formData.get('file');
     

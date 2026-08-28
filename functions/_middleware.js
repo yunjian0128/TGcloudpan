@@ -1,3 +1,5 @@
+import { requireSession } from './_shared/auth.js';
+
 export async function onRequest(context) {
   const { request, next } = context;
   const url = new URL(request.url);
@@ -8,8 +10,8 @@ export async function onRequest(context) {
     return next();
   }
 
-  const cookie = request.headers.get('Cookie') || '';
-  if (cookie.includes('admin_session=1')) {
+  const isAuth = await requireSession(context.env, request);
+  if (isAuth) {
     return next();
   }
 

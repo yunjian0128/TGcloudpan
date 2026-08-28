@@ -1,12 +1,15 @@
+import { requireSession } from '../../_shared/auth.js';
+
 export async function onRequestGet(context) {
-  const { request } = context;
-  const cookie = request.headers.get('Cookie') || '';
-  if (!cookie.includes('admin_session=1')) {
-    // 未登录，返回登录页
-    return new Response(getLoginHTML(), { headers: { 'Content-Type': 'text/html;charset=utf-8' } });
+  const { request, env } = context;
+  const isAuth = await requireSession(env, request);
+  const headers = { 'Content-Type': 'text/html;charset=utf-8' };
+
+  if (!isAuth) {
+    return new Response(getLoginHTML(), { headers });
   }
-  // 已登录，返回管理后台页面
-  return new Response(getAdminHTML(), { headers: { 'Content-Type': 'text/html;charset=utf-8' } });
+
+  return new Response(getAdminHTML(), { headers });
 }
 
 function getLoginHTML() {
@@ -96,7 +99,7 @@ function getAdminHTML() {
         const d = new Date(ts); return d.toLocaleString();
       }
       function logout() {
-        document.cookie = 'admin_session=; Max-Age=0; path=/';
+        document.cookie = 'admin_session=; Path=/; Max-Age=0';
         location.reload();
       }
       loadFiles();

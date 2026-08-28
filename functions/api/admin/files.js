@@ -1,8 +1,9 @@
+import { requireSession } from '../../_shared/auth.js';
+
 export async function onRequestGet(context) {
   const { env, request } = context;
-  // 校验 session cookie
-  const cookie = request.headers.get('Cookie') || '';
-  if (!cookie.includes('admin_session=1')) {
+  const isAuth = await requireSession(env, request);
+  if (!isAuth) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
   }
   if (!env.UPLOADS_KV) {

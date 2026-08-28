@@ -1,5 +1,15 @@
+import { requireSession } from '../_shared/auth.js';
+
 export async function onRequestGet(context) {
-  const { request } = context;
+  const { request, env } = context;
+
+  if (!await requireSession(env, request)) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
   const url = new URL(request.url);
   const fileUrl = url.searchParams.get('url');
   const filename = url.searchParams.get('filename');
